@@ -500,3 +500,5 @@ body.touch.in-game .tc-center { display: block; }
   #screen-menu .panel { width: min(560px, 100%); }
   #screen-menu .panel .big { display: inline-block; width: calc(50% - 6px); margin: 6px 2px; }
 }
+
+.version { margin-top: 8px; font-size: 11px; opacity: 0.5; }

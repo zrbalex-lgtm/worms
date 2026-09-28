@@ -1,5 +1,5 @@
 // App entry point: menus, lobby, host/client game loops and glue between modules.
-import { NET, SIM_STEP, DEFAULT_SETTINGS, WORLD } from './config.js';
+import { NET, SIM_STEP, DEFAULT_SETTINGS, WORLD, VERSION } from './config.js';
 import { Terrain, generateTerrain } from './terrain.js';
 import { Game, buildSetup } from './game.js';
 import { ClientSync } from './sync.js';
@@ -165,6 +165,7 @@ function initMenus() {
     ui.show('menu');
   }
   if (LOCAL) $('local-badge').classList.remove('hidden');
+  $('version').textContent = 'v' + VERSION;
 }
 
 let quitArmed = 0;
