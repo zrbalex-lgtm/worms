@@ -35,6 +35,12 @@ export const NET = {
   TIMEOUT: 9000,        // ms without any message => peer considered gone
   MAX_PLAYERS: 4,
   TERRAIN_CHUNK: 12000, // characters per terrain chunk message
+  // Optional TURN relay, needed when devices can't connect directly (mobile data, strict routers).
+  // Easiest: create a free account at https://www.metered.ca/tools/openrelay/ and paste your
+  // credentials URL here, e.g. 'https://YOURAPP.metered.live/api/v1/turn/credentials?apiKey=YOUR_KEY'.
+  TURN_CREDENTIALS_URL: '',
+  // Or list static ICE servers, e.g. [{ urls: 'turn:example.com:3478', username: 'u', credential: 'p' }].
+  ICE_SERVERS: [],
 };
 
 export const SIM_STEP = 1 / 60;

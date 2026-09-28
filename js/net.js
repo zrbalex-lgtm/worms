@@ -121,10 +121,46 @@ export function loadPeerJS() {
   return peerJsPromise;
 }
 
-function createPeer(local, id) {
+// PeerJS's built-in defaults (Google STUN + the free PeerJS TURN relay, which is often unreliable).
+const DEFAULT_ICE = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+];
+let iceCache = null;
+
+// Collect ICE servers: optional TURN credentials fetched from NET.TURN_CREDENTIALS_URL
+// (e.g. a free Metered.ca account), optional static NET.ICE_SERVERS, then the defaults.
+async function getIceServers() {
+  if (iceCache) return iceCache;
+  const list = [];
+  if (NET.TURN_CREDENTIALS_URL) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 6000);
+      const res = await fetch(NET.TURN_CREDENTIALS_URL, { signal: ctrl.signal });
+      clearTimeout(t);
+      const servers = await res.json();
+      if (Array.isArray(servers)) list.push(...servers);
+    } catch (e) {
+      console.warn('TURN credential fetch failed', e);
+    }
+  }
+  if (Array.isArray(NET.ICE_SERVERS)) list.push(...NET.ICE_SERVERS);
+  list.push(...DEFAULT_ICE);
+  iceCache = list;
+  return list;
+}
+
+export function hasCustomTurn() {
+  return !!NET.TURN_CREDENTIALS_URL || (Array.isArray(NET.ICE_SERVERS) && NET.ICE_SERVERS.some(s => String(s.urls).includes('turn')));
+}
+
+async function createPeer(local, id) {
   if (local) return new LocalPeer(id);
-  if (typeof window.Peer !== 'function') throw new Error('PeerJS failed to load (check your internet connection).');
-  return id ? new window.Peer(id, { debug: 1 }) : new window.Peer({ debug: 1 });
+  await loadPeerJS();
+  const opts = { debug: 1, config: { iceServers: await getIceServers(), sdpSemantics: 'unified-plan' } };
+  return id ? new window.Peer(id, opts) : new window.Peer(opts);
 }
 
 // ---------- Host ----------
@@ -143,14 +179,13 @@ export class HostNet extends Emitter {
 
   // Resolves with the room code once registered with the broker.
   async start() {
-    if (!this.local) await loadPeerJS();
     return new Promise((resolve, reject) => {
       let attempts = 0;
-      const tryOpen = () => {
+      const tryOpen = async () => {
         attempts++;
         const code = makeRoomCode();
         let peer;
-        try { peer = createPeer(this.local, NET.PEER_PREFIX + code); } catch (e) { reject(e); return; }
+        try { peer = await createPeer(this.local, NET.PEER_PREFIX + code); } catch (e) { reject(e); return; }
         let opened = false;
         peer.on('open', () => {
           opened = true;
@@ -273,29 +308,70 @@ export class ClientNet extends Emitter {
   }
 
   // Resolves with { id } after the host welcomes us; rejects on failure.
-  async join(code, name) {
-    if (!this.local) await loadPeerJS();
-    if (this.closed) throw new Error('Cancelled.');
+  // onStatus(text) reports progress so the player can see which stage is slow.
+  async join(code, name, onStatus = () => {}) {
+    onStatus('Loading network library…');
+    const peer = await createPeer(this.local);
+    if (this.closed) { peer.destroy(); throw new Error('Cancelled.'); }
+    this.peer = peer;
     return new Promise((resolve, reject) => {
-      let peer;
-      try { peer = createPeer(this.local); } catch (e) { reject(e); return; }
-      this.peer = peer;
       let settled = false;
+      let stage = 'broker';   // broker -> dialing -> handshake
+      let iceState = '';
+      let pollTimer = null;
+      let stageTimer = null;
       const fail = msg => {
         if (settled) return;
         settled = true;
+        clearTimeout(stageTimer);
+        clearInterval(pollTimer);
         this.destroy();
         reject(new Error(msg));
       };
-      const timer = setTimeout(() => fail('Could not reach the host. Check the room code.'), 15000);
+      const natError = () => fail(
+        'The room was found, but a direct connection to the host could not be opened' +
+        (iceState ? ` (network state: ${iceState})` : '') + '. ' +
+        'Your networks are probably blocking peer-to-peer traffic. Try putting both devices on the same Wi-Fi, ' +
+        (hasCustomTurn() ? 'or check the TURN server settings.' : 'or set up a free TURN relay server (see README → "Connection problems").')
+      );
+      const setStage = (st, ms, onTimeout) => {
+        stage = st;
+        clearTimeout(stageTimer);
+        stageTimer = setTimeout(onTimeout, ms);
+      };
+
+      onStatus('Contacting the matchmaking server…');
+      setStage('broker', 12000, () => fail('Cannot reach the PeerJS matchmaking server (0.peerjs.com). Check your internet connection or try again in a minute.'));
+
       peer.on('error', err => {
-        if (!settled) { clearTimeout(timer); fail(describePeerError(err)); }
-        else console.warn('Peer error', err);
+        if (settled) { console.warn('Peer error', err); return; }
+        if (err && err.type === 'peer-unavailable') fail('Room not found. Check the code — the host must keep the game open.');
+        else if (stage === 'dialing' || stage === 'handshake') natError();
+        else fail(describePeerError(err));
       });
+
       peer.on('open', () => {
+        onStatus('Looking for the room…');
         const conn = peer.connect(NET.PEER_PREFIX + code, { reliable: true, serialization: 'json', metadata: { name } });
         this.conn = conn;
+        setStage('dialing', 30000, natError);
+        // Watch the WebRTC connection so failures are reported immediately and progress is visible.
+        pollTimer = setInterval(() => {
+          const pc = conn.peerConnection;
+          if (!pc) return;
+          if (pc.iceConnectionState !== iceState) {
+            iceState = pc.iceConnectionState;
+            if (!settled && stage === 'dialing') {
+              const label = { new: 'starting', checking: 'finding a network path', connected: 'connected', completed: 'connected', disconnected: 'unstable', failed: 'failed' }[iceState] || iceState;
+              onStatus(`Connecting to the host… (${label})`);
+            }
+          }
+          if (iceState === 'failed' && !settled) natError();
+        }, 300);
         conn.on('open', () => {
+          stage = 'handshake';
+          onStatus('Connected. Joining the room…');
+          setStage('handshake', 10000, () => fail('Connected to the host, but it did not answer. Try again.'));
           conn.send({ t: 'hello', name });
           this.lastSeen = Date.now();
         });
@@ -305,11 +381,11 @@ export class ClientNet extends Emitter {
           if (!settled) {
             if (msg.t === 'welcome') {
               settled = true;
-              clearTimeout(timer);
+              clearTimeout(stageTimer);
+              clearInterval(pollTimer);
               this._ping = setInterval(() => this._heartbeat(), NET.PING_EVERY);
               resolve({ id: msg.id });
             } else if (msg.t === 'reject') {
-              clearTimeout(timer);
               fail(msg.reason || 'The host refused the connection.');
             }
             return;
@@ -317,8 +393,8 @@ export class ClientNet extends Emitter {
           if (msg.t === 'p') return;
           this.emit('message', msg);
         });
-        conn.on('close', () => this._lost());
-        conn.on('error', () => this._lost());
+        conn.on('close', () => { if (settled) this._lost(); else natError(); });
+        conn.on('error', () => { if (settled) this._lost(); else natError(); });
       });
     });
   }

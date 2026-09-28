@@ -117,8 +117,7 @@ To test on a phone against your computer, the page must be served over HTTPS (e.
 
 - The host's PeerJS ID is `wiggle-wars-v1-<ROOMCODE>` on the public PeerJS cloud broker (`0.peerjs.com`).
   The broker is only used for matchmaking; game data flows directly between browsers.
-- PeerJS ships default STUN/TURN servers. On very restrictive networks (some corporate Wi-Fi or mobile carriers)
-  a direct connection may still fail; try another network or add your own TURN server in `createPeer()` in `js/net.js`.
+- See **Connection problems** below if devices find the room but can't connect.
 - The host broadcasts compact snapshots ~20×/s; terrain is sent once at game start (run-length encoded, chunked)
   and afterwards only as crater events `(x, y, r)`.
 - Only the active player's inputs are accepted by the host.
@@ -126,6 +125,26 @@ To test on a phone against your computer, the page must be served over HTTPS (e.
   If the host disconnects, everybody sees “Host left the game”.
 - Keep the host's screen on: when an iPhone host locks its screen or switches apps, iOS pauses the page and the game
   stalls for everyone (the game requests a screen wake lock where supported).
+
+## Connection problems
+
+The joining screen shows which step is slow:
+
+| Message | Meaning |
+|---|---|
+| *Cannot reach the PeerJS matchmaking server* | No internet, or `0.peerjs.com` is blocked/down. |
+| *Room not found* | Wrong code, or the host closed the page / its tab was suspended. |
+| *The room was found, but a direct connection … could not be opened* | The two networks block direct peer-to-peer traffic (NAT). This is the most common problem, e.g. phone on mobile data or a router without "hairpinning". |
+
+For the last case the game needs a **TURN relay**. PeerJS's free built-in relay is often unreliable, so set up your own (free):
+
+1. Create a free account at [Metered Open Relay](https://www.metered.ca/tools/openrelay/) and create an app.
+2. Copy your *TURN credentials URL*: `https://<yourapp>.metered.live/api/v1/turn/credentials?apiKey=<key>`.
+3. Paste it into `TURN_CREDENTIALS_URL` in `js/config.js`, commit and push. Everyone who opens the page then uses the relay automatically.
+
+Alternatively list your own servers in `ICE_SERVERS` (e.g. a self-hosted coturn).
+
+Quick check without a relay: connect both devices to the **same Wi-Fi** and try again.
 
 ## License
 

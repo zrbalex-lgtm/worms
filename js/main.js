@@ -329,7 +329,7 @@ async function joinGame() {
     net.destroy();
   });
   try {
-    const res = await net.join(code, name);
+    const res = await net.join(code, name, text => { if (S.net === net) $('connecting-text').textContent = text; });
     if (S.net !== net) return;
     S.myId = res.id;
     // Clean the ?room= parameter so a reload doesn't auto-join again.
