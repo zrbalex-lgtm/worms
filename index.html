@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Wiggle Wars</title>
+  <meta name="description" content="Turn-based multiplayer worm artillery in your browser. Peer-to-peer, no install.">
+  <meta name="theme-color" content="#1b1440">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Wiggle Wars">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+  <!-- Display font, loaded without blocking rendering (falls back to system fonts offline). -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap" media="print" onload="this.media='all'">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- In-game HUD -->
+  <div id="hud" class="hidden">
+    <div id="hud-top">
+      <div id="team-bars"></div>
+      <div id="turn-banner"><span id="turn-name"></span></div>
+      <div id="hud-right">
+        <div id="wind">
+          <div id="wind-bar"><div id="wind-mid"></div><div id="wind-fill"></div></div>
+          <span id="wind-label">WIND</span>
+        </div>
+        <div id="timer">–</div>
+        <button id="btn-help" class="hud-btn" aria-label="Controls help">?</button>
+        <button id="btn-quit" class="hud-btn" aria-label="Leave game">✕</button>
+      </div>
+    </div>
+    <button id="weapon-chip" aria-label="Choose weapon">
+      <span id="weapon-chip-icon"></span>
+      <span id="weapon-chip-name"></span>
+    </button>
+
+    <!-- Touch controls (visible only on touch devices during your turn) -->
+    <div id="tc-left" class="tc">
+      <button id="btn-left" class="tc-btn" aria-label="Walk left">◀</button>
+      <button id="btn-right" class="tc-btn" aria-label="Walk right">▶</button>
+      <button id="btn-jump" class="tc-btn tc-small" aria-label="Jump">JUMP</button>
+    </div>
+    <div id="tc-right" class="tc">
+      <button id="btn-weapon" class="tc-btn" aria-label="Weapons"></button>
+      <button id="btn-fire" class="tc-btn tc-fire" aria-label="Fire">FIRE</button>
+    </div>
+    <button id="btn-center" class="tc-btn tc-center" aria-label="Center on my worm">◎</button>
+
+    <div id="banner"></div>
+  </div>
+
+  <div id="weapon-picker" class="overlay hidden">
+    <div id="picker-grid"></div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- Screens -->
+  <div id="screen-menu" class="screen hidden">
+    <div class="panel">
+      <h1 class="logo">Wiggle<span>Wars</span></h1>
+      <p class="tagline">Turn-based worm warfare · 2–4 players · peer-to-peer</p>
+      <button id="btn-create" class="big">Create game</button>
+      <button id="btn-join" class="big alt">Join game</button>
+      <details class="controls-help">
+        <summary>How to play</summary>
+        <ul>
+          <li><b>Keyboard:</b> ←/→ or A/D walk · W/Enter jump · ↑/↓ aim · hold &amp; release Space to fire · 1–5 weapons · Tab switch worm · drag or screen edges to pan · wheel zooms · C recenters</li>
+          <li><b>Touch:</b> drag back from your worm like a slingshot and let go to fire · buttons walk, jump, pick weapons and fire · drag to pan, pinch to zoom · tap one of your worms to switch at the start of a turn</li>
+          <li>Fire ends your turn after a 3 s retreat. Water and map edges are deadly. Last team standing wins.</li>
+        </ul>
+      </details>
+      <div id="local-badge" class="badge hidden">Local test mode (BroadcastChannel)</div>
+    </div>
+  </div>
+
+  <div id="screen-create" class="screen hidden">
+    <div class="panel">
+      <h2>Create game</h2>
+      <label>Your name <input id="host-name" maxlength="14" autocomplete="off" placeholder="Player"></label>
+      <label>Worms per team
+        <select id="opt-worms">
+          <option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option>
+        </select>
+      </label>
+      <div class="field">Turn time
+        <div id="opt-time" class="seg">
+          <button type="button" data-time="30">30 s</button>
+          <button type="button" data-time="45" class="on">45 s</button>
+          <button type="button" data-time="60">60 s</button>
+        </div>
+      </div>
+      <label>Starting HP
+        <select id="opt-hp">
+          <option>50</option><option selected>100</option><option>150</option><option>200</option>
+        </select>
+      </label>
+      <div id="create-error" class="error hidden"></div>
+      <div class="row">
+        <button id="btn-create-back" class="alt">Back</button>
+        <button id="btn-create-go">Create room</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-join" class="screen hidden">
+    <div class="panel">
+      <h2>Join game</h2>
+      <label>Room code <input id="join-code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" class="code-input"></label>
+      <label>Your name <input id="join-name" maxlength="14" autocomplete="off" placeholder="Player"></label>
+      <div id="join-error" class="error hidden"></div>
+      <div class="row">
+        <button id="btn-join-back" class="alt">Back</button>
+        <button id="btn-join-go">Join</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-lobby" class="screen hidden">
+    <div class="panel wide">
+      <h2>Lobby</h2>
+      <div class="code-box">
+        <div class="code-label">Room code</div>
+        <div id="lobby-code" class="code"></div>
+        <div id="lobby-link" class="link"></div>
+        <button id="btn-share" class="small">Share link</button>
+      </div>
+      <ul id="lobby-players"></ul>
+      <div id="lobby-settings" class="muted"></div>
+      <div id="lobby-status" class="muted"></div>
+      <div class="row">
+        <button id="btn-leave" class="alt">Leave</button>
+        <button id="btn-start" class="hidden">Start</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-connecting" class="screen hidden">
+    <div class="panel">
+      <div class="spinner"></div>
+      <p id="connecting-text">Connecting…</p>
+      <button id="btn-connecting-cancel" class="alt">Cancel</button>
+    </div>
+  </div>
+
+  <div id="screen-over" class="screen dim hidden">
+    <div class="panel">
+      <div class="trophy">🏆</div>
+      <h2 id="over-title">Victory!</h2>
+      <p id="over-sub" class="muted"></p>
+      <p id="over-wait" class="muted hidden">Waiting for the host to start another round…</p>
+      <div class="row">
+        <button id="btn-menu" class="alt">Main menu</button>
+        <button id="btn-again">Play again</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-message" class="screen hidden">
+    <div class="panel">
+      <h2 id="message-title"></h2>
+      <p id="message-text" class="muted"></p>
+      <button id="btn-message-ok">Main menu</button>
+    </div>
+  </div>
+
+  <div id="help-overlay" class="overlay hidden">
+    <div class="panel help">
+      <h2>Controls</h2>
+      <p><b>Keyboard</b>: ←/→ or A/D walk · W or Enter jump · ↑/↓ aim · hold Space for power, release to fire · 1 Fist · 2 Minigun · 3 Shotgun · 4 Grenade · 5 Bazooka · Tab next worm · C center camera · mouse drag / screen edges pan · wheel zoom</p>
+      <p><b>Touch</b>: drag back from your worm (slingshot) and release to fire · ◀ ▶ walk · JUMP · weapon button · FIRE repeats your last aim · ◎ recenters · drag map to pan · pinch to zoom · tap your worm to switch before acting</p>
+      <p class="muted">Tap anywhere to close.</p>
+    </div>
+  </div>
+
+  <div id="rotate-overlay">
+    <div class="rotate-icon">📱↻</div>
+    <p>Rotate your device to landscape</p>
+  </div>
+</body>
+</html>
