@@ -1,5 +1,5 @@
 // DOM user interface: screens, lobby, HUD, weapon picker, toasts and overlays.
-import { WEAPONS, W_GRENADE } from './weapons.js';
+import { WEAPONS, W_TELEPORT } from './weapons.js';
 import { TEAM_COLORS } from './config.js';
 
 const $ = id => document.getElementById(id);
@@ -16,6 +16,8 @@ export const WEAPON_ICONS = [
   `<svg viewBox="0 0 48 48"><circle cx="22" cy="28" r="14" fill="#3f8a2c" stroke="#222" stroke-width="2"/><path d="M12 24h20M12 32h20M22 14v28" stroke="#2b5e1e" stroke-width="2"/><rect x="18" y="8" width="10" height="7" fill="#aaa" stroke="#222" stroke-width="2"/><circle cx="34" cy="10" r="4" fill="none" stroke="#ccc" stroke-width="2"/></svg>`,
   // Bazooka
   `<svg viewBox="0 0 48 48"><rect x="4" y="19" width="36" height="10" rx="2" fill="#5d7030" stroke="#222" stroke-width="2"/><rect x="38" y="17" width="7" height="14" fill="#3b471c" stroke="#222" stroke-width="2"/><rect x="14" y="29" width="5" height="9" fill="#444" stroke="#222" stroke-width="2"/><rect x="8" y="16" width="8" height="4" fill="#3b471c"/></svg>`,
+  // Teleport (swirl portal)
+  `<svg viewBox="0 0 48 48"><ellipse cx="24" cy="26" rx="18" ry="16" fill="#7b3fe4" stroke="#222" stroke-width="2"/><path d="M24 26m-11 0a11 10 0 1 1 11 10a7 6 0 1 1 -5-8a3 3 0 1 1 5 2" fill="none" stroke="#e7d4ff" stroke-width="3" stroke-linecap="round"/><path d="M40 6l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#ffe35a" stroke="#222" stroke-width="1"/></svg>`,
 ];
 
 export class UI {
@@ -167,19 +169,21 @@ export class UI {
     }
 
     // Weapon chip.
-    const gren = view.grenades[view.turnTeam] ?? 0;
-    const wKey = view.weapon + '|' + gren + '|' + view.shotsLeft + '|' + isMyTurn;
+    const ammo = (view.ammo && view.ammo[view.turnTeam]) || [];
+    const hint = isMyTurn && view.weapon === W_TELEPORT && view.phase === 'turn';
+    const wKey = view.weapon + '|' + ammo.join(',') + '|' + view.shotsLeft + '|' + isMyTurn + '|' + hint;
     if (c.weapon !== wKey) {
       c.weapon = wKey;
       const wd = WEAPONS[view.weapon];
       $('weapon-chip-icon').innerHTML = WEAPON_ICONS[view.weapon];
       let extra = '';
-      if (view.weapon === W_GRENADE) extra = ` ×${gren}`;
+      if (ammo[view.weapon] >= 0) extra = ` ×${ammo[view.weapon]}`;
       if (wd.shots) extra = ` (${view.shotsLeft} shot${view.shotsLeft === 1 ? '' : 's'})`;
+      if (hint) extra += ' — tap a spot';
       $('weapon-chip-name').textContent = wd.name + extra;
       $('weapon-chip').classList.toggle('mine', isMyTurn);
       $('btn-weapon').innerHTML = WEAPON_ICONS[view.weapon];
-      this.updatePickerAmmo(gren);
+      this.updatePickerAmmo(ammo);
     }
 
     // Touch controls visible only during my turn.
@@ -211,11 +215,14 @@ export class UI {
     });
   }
 
-  updatePickerAmmo(gren) {
-    const el = document.querySelector(`.picker-item[data-weapon="${W_GRENADE}"]`);
-    if (!el) return;
-    el.querySelector('.pammo').textContent = '×' + gren;
-    el.classList.toggle('empty', gren <= 0);
+  updatePickerAmmo(ammo) {
+    WEAPONS.forEach((w, i) => {
+      const el = document.querySelector(`.picker-item[data-weapon="${i}"]`);
+      if (!el) return;
+      const n = ammo[i];
+      el.querySelector('.pammo').textContent = n >= 0 ? '×' + n : '';
+      el.classList.toggle('empty', n === 0);
+    });
   }
 
   openPicker() { $('weapon-picker').classList.remove('hidden'); }

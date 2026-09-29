@@ -1,7 +1,7 @@
 // Shared constants for simulation, rendering and networking.
 
 // Shown in the main menu so players can confirm which build they are running.
-export const VERSION = '1.2';
+export const VERSION = '1.3';
 
 export const WORLD = {
   W: 2600,          // map width in world pixels

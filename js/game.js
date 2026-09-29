@@ -1,7 +1,18 @@
 // Host-authoritative game simulation: turns, worms, weapons, damage, victory.
 import { WORLD, PHYS, TURN, TEAM_COLORS, WORM_NAMES } from './config.js';
-import { collides, walkWorm, updateWorm } from './physics.js';
-import { WEAPONS, W_GRENADE, W_BAZOOKA, W_SHOTGUN, fireWeapon, updateBursts, updateProjectiles } from './weapons.js';
+import { collides, walkWorm, updateWorm, sweep } from './physics.js';
+import { WEAPONS, W_GRENADE, W_BAZOOKA, W_SHOTGUN, W_TELEPORT, fireWeapon, updateBursts, updateProjectiles } from './weapons.js';
+
+// Supply drops.
+export const CRATE_R = 8;
+export const CRATE_KINDS = ['hp', 'bazooka', 'grenade', 'teleport'];
+const CRATE_WEIGHTS = [0.4, 0.25, 0.25, 0.1];
+const CRATE_HP = 35;
+const DROP_EVERY = 2;          // a plane flies over every N turns
+const MAX_CRATES = 4;
+const PLANE_SPEED = 420;
+const PLANE_Y = 70;
+const CHUTE_SPEED = 85;
 
 // Worm flags packed into snapshots.
 export const F_ALIVE = 1;
@@ -58,6 +69,9 @@ export class Game {
     this.input = { move: 0 };
     this.showPower = 0;
     this.turn = { acted: false, shotsLeft: 2, weaponLocked: false, noMove: false };
+    this.crates = [];
+    this.plane = null;
+    this.turnCount = 0;
 
     this.teams = setup.teams.map((t, i) => ({
       idx: i,
@@ -65,7 +79,7 @@ export class Game {
       name: t.name,
       color: t.color,
       connected: true,
-      grenades: WEAPONS[W_GRENADE].ammo,
+      ammo: WEAPONS.map(w => (w.ammo === undefined ? -1 : w.ammo)), // -1 = unlimited
       weapon: W_BAZOOKA,
       elev: 0.6,
       lastWorm: -1,
@@ -167,7 +181,9 @@ export class Game {
     this.turn = { acted: false, shotsLeft: WEAPONS[W_SHOTGUN].shots, weaponLocked: false, noMove: false };
     this.input.move = 0;
     this.showPower = 0;
-    if (team.weapon === W_GRENADE && team.grenades <= 0) team.weapon = W_BAZOOKA;
+    if (!this.hasAmmo(team, team.weapon)) team.weapon = this.fallbackWeapon(team);
+    this.turnCount++;
+    if (this.turnCount > 1 && this.turnCount % DROP_EVERY === 0) this.launchPlane();
     // Pick the next living worm of this team.
     const own = this.worms.filter(w => w.team === ti);
     let idx = own.findIndex(w => w.id === team.lastWorm);
@@ -193,6 +209,7 @@ export class Game {
 
   everythingSettled() {
     if (this.projectiles.length || this.bursts.length) return false;
+    if (this.crates.some(c => !c.landed)) return false;
     return this.worms.every(w => !w.alive || w.gone || w.onGround);
   }
 
@@ -236,6 +253,118 @@ export class Game {
     }
   }
 
+  // ---------- Ammo ----------
+
+  hasAmmo(team, wi) { return team.ammo[wi] !== 0; }
+
+  useAmmo(team, wi) { if (team.ammo[wi] > 0) team.ammo[wi]--; }
+
+  fallbackWeapon(team) {
+    for (const wi of [W_BAZOOKA, W_GRENADE, W_SHOTGUN]) if (this.hasAmmo(team, wi)) return wi;
+    return W_SHOTGUN;
+  }
+
+  // ---------- Supply drops ----------
+
+  launchPlane() {
+    if (this.crates.length >= MAX_CRATES) return;
+    // Pick a drop column with ground above the water.
+    let dropX = null;
+    for (let tries = 0; tries < 40 && dropX === null; tries++) {
+      const x = 150 + Math.random() * (WORLD.W - 300);
+      for (let y = 0; y < WORLD.WATER_Y - 30; y += 4) {
+        if (this.terrain.solid(Math.round(x), y)) { dropX = x; break; }
+      }
+    }
+    if (dropX === null) return;
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    let r = Math.random();
+    let kind = 0;
+    while (kind < CRATE_WEIGHTS.length - 1 && r > CRATE_WEIGHTS[kind]) { r -= CRATE_WEIGHTS[kind]; kind++; }
+    this.plane = { x: dir > 0 ? -200 : WORLD.W + 200, y: PLANE_Y, dir, dropX, kind, dropped: false };
+    this.emit({ k: 'plane' });
+  }
+
+  updateDrops(dt) {
+    const p = this.plane;
+    if (p) {
+      p.x += p.dir * PLANE_SPEED * dt;
+      if (!p.dropped && (p.dir > 0 ? p.x >= p.dropX : p.x <= p.dropX)) {
+        p.dropped = true;
+        this.crates.push({ id: this.nextId++, x: p.dropX, y: p.y + 24, vx: 0, vy: 30, kind: p.kind, landed: false, chute: true });
+        this.emit({ k: 'drop', x: Math.round(p.dropX), y: p.y + 24 });
+      }
+      if (p.x < -260 || p.x > WORLD.W + 260) this.plane = null;
+    }
+    const t = this.terrain;
+    for (let i = this.crates.length - 1; i >= 0; i--) {
+      const c = this.crates[i];
+      if (c.landed) {
+        if (!collides(t, c.x, c.y + 1, CRATE_R)) { c.landed = false; c.chute = false; }
+      }
+      if (!c.landed) {
+        c.vy = Math.min(c.vy + PHYS.GRAVITY * dt, c.chute ? CHUTE_SPEED : 500);
+        if (sweep(t, c, dt, CRATE_R, 0, 0)) {
+          c.landed = true;
+          c.chute = false;
+          c.vx = 0;
+          c.vy = 0;
+        }
+      }
+      if (c.y > WORLD.WATER_Y + 4 || c.x < -20 || c.x > WORLD.W + 20) {
+        this.emit({ k: 'splash', x: Math.round(c.x), s: 0 });
+        this.crates.splice(i, 1);
+        continue;
+      }
+      // Pick-up by any living worm that touches the crate.
+      for (const w of this.worms) {
+        if (!w.alive || w.gone) continue;
+        if (Math.hypot(w.x - c.x, w.y - c.y) < PHYS.WORM_R + CRATE_R + 3) {
+          this.collectCrate(c, w);
+          this.crates.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  collectCrate(c, w) {
+    const team = this.teams[w.team];
+    const kind = CRATE_KINDS[c.kind];
+    let text = '';
+    if (kind === 'hp') { w.hp += CRATE_HP; text = `+${CRATE_HP} HP`; }
+    else if (kind === 'bazooka') { if (team.ammo[W_BAZOOKA] >= 0) team.ammo[W_BAZOOKA]++; text = '+1 Rocket'; }
+    else if (kind === 'grenade') { if (team.ammo[W_GRENADE] >= 0) team.ammo[W_GRENADE] += 2; text = '+2 Grenades'; }
+    else if (kind === 'teleport') { if (team.ammo[W_TELEPORT] >= 0) team.ammo[W_TELEPORT]++; text = '+1 Teleport'; }
+    this.emit({ k: 'pickup', id: w.id, kind: c.kind, x: Math.round(c.x), y: Math.round(c.y), text });
+  }
+
+  // Move a worm to a target point, snapping onto ground below if there is any close by.
+  teleport(w, tx, ty) {
+    if (typeof tx !== 'number' || typeof ty !== 'number' || !isFinite(tx) || !isFinite(ty)) return false;
+    const R = PHYS.WORM_R;
+    if (tx < R + 2 || tx > WORLD.W - R - 2 || ty < -150 || ty > WORLD.WATER_Y - R - 4) return false;
+    let spot = null;
+    for (let dy = 0; dy >= -36 && !spot; dy -= 3) {
+      for (const dx of [0, -4, 4, -8, 8, -12, 12]) {
+        if (!collides(this.terrain, tx + dx, ty + dy, R)) { spot = { x: Math.round(tx + dx), y: Math.round(ty + dy) }; break; }
+      }
+    }
+    if (!spot) return false;
+    let drop = 0;
+    while (drop < 90 && !collides(this.terrain, spot.x, spot.y + 1, R)) { spot.y++; drop++; }
+    if (spot.y > WORLD.WATER_Y - R) return false;
+    this.emit({ k: 'tele', x1: Math.round(w.x), y1: Math.round(w.y), x2: spot.x, y2: spot.y });
+    w.x = spot.x;
+    w.y = spot.y;
+    w.vx = 0;
+    w.vy = 0;
+    w.knocked = false;
+    w.onGround = collides(this.terrain, w.x, w.y + 1, R);
+    w.fallStartY = w.y;
+    return true;
+  }
+
   // ---------- Damage ----------
 
   damageWorm(w, amount) {
@@ -276,6 +405,15 @@ export class Game {
     this.terrain.carve(cx, cy, cr);
     this.emit({ k: 'crater', x: cx, y: cy, r: cr });
     this.emit({ k: small ? 'puff' : 'boom', x: cx, y: cy, r: cr });
+    if (!small) {
+      for (let i = this.crates.length - 1; i >= 0; i--) {
+        const c = this.crates[i];
+        if (Math.hypot(c.x - x, c.y - y) < r + CRATE_R) {
+          this.crates.splice(i, 1);
+          this.emit({ k: 'puff', x: Math.round(c.x), y: Math.round(c.y) });
+        }
+      }
+    }
     if (!dmg && !kb) return;
     for (const w of this.worms) {
       if (w.gone) continue;
@@ -311,8 +449,16 @@ export class Game {
           w.vx = w.facing * PHYS.JUMP_VX;
           w.vy = PHYS.JUMP_VY;
           w.fallStartY = w.y;
+          w.jumpT = this.time;
+          w.flipped = false;
           this.turn.acted = true;
           this.emit({ k: 'jump', id: w.id });
+        } else if (this.canMove() && !w.onGround && !w.knocked && !w.flipped && this.time - (w.jumpT ?? -9) < 0.4) {
+          // Second press right after a jump: a high backflip to escape pits.
+          w.flipped = true;
+          w.vx = -w.facing * 45;
+          w.vy = PHYS.JUMP_VY * 1.4;
+          this.emit({ k: 'jump', id: w.id, flip: 1 });
         }
         break;
       case 'aim':
@@ -322,8 +468,8 @@ export class Game {
       case 'weapon': {
         const wi = a.w | 0;
         if (this.phase !== 'turn' || this.turn.weaponLocked || wi < 0 || wi >= WEAPONS.length) break;
-        if (wi === W_GRENADE && team.grenades <= 0) {
-          this.emit({ k: 'msg', text: 'No grenades left!', team: team.idx });
+        if (!this.hasAmmo(team, wi)) {
+          this.emit({ k: 'msg', text: `No ${WEAPONS[wi].name.toLowerCase()} left!`, team: team.idx });
           break;
         }
         team.weapon = wi;
@@ -349,21 +495,28 @@ export class Game {
       }
       case 'fire': {
         if (this.phase !== 'turn' || !w || !w.alive || !w.onGround) break;
-        this.applyAim(a);
         const weapon = team.weapon;
-        if (weapon === W_GRENADE) {
-          if (team.grenades <= 0) break;
-          team.grenades--;
+        if (!this.hasAmmo(team, weapon)) break;
+        if (weapon === W_TELEPORT) {
+          if (!this.teleport(w, a.tx, a.ty)) {
+            this.emit({ k: 'msg', text: "Can't teleport there", team: team.idx });
+            break;
+          }
+          this.useAmmo(team, weapon);
+          this.turn.acted = true;
+          this.phase = 'retreat';
+          this.retreatLeft = TURN.RETREAT;
+          break;
         }
+        this.applyAim(a);
+        this.useAmmo(team, weapon);
         this.turn.acted = true;
-        this.input.move = 0;
-        w.walking = false;
         this.showPower = 0;
         const power = typeof a.pw === 'number' ? a.pw : 0.6;
         const res = fireWeapon(this, w, weapon, team.elev, power);
         if (res === 'continue') {
+          // Between shotgun shots the worm may still walk, but can't change weapons.
           this.turn.weaponLocked = true;
-          this.turn.noMove = true;
         } else if (res === 'burst') {
           this.phase = 'firing';
         } else {
@@ -428,6 +581,7 @@ export class Game {
     }
 
     updateProjectiles(this, dt);
+    this.updateDrops(dt);
     this.physics(dt);
 
     // Active worm died or vanished during its own turn.
@@ -490,7 +644,9 @@ export class Game {
       sl: this.turn.shotsLeft,
       lk: this.turn.acted ? 1 : 0,
       win: this.winner,
-      tg: this.teams.map(t => t.grenades),
+      ta: this.teams.map(t => t.ammo),
+      c: this.crates.flatMap(c => [c.id, r1(c.x), r1(c.y), c.kind, c.chute ? 1 : 0]),
+      pl: this.plane ? [r1(this.plane.x), this.plane.y, this.plane.dir] : 0,
       tc: this.teams.map(t => (t.connected ? 1 : 0)),
       w,
       p,
@@ -513,7 +669,9 @@ export class Game {
       shotsLeft: this.turn.shotsLeft,
       locked: this.turn.acted,
       winner: this.winner,
-      grenades: this.teams.map(t => t.grenades),
+      ammo: this.teams.map(t => t.ammo),
+      crates: this.crates,
+      plane: this.plane,
       connected: this.teams.map(t => t.connected),
       worms: this.worms,
       projectiles: this.projectiles,

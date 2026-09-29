@@ -13,7 +13,9 @@ Works on desktop browsers and on iPhone/iPad (iOS Safari), in landscape.
 - Procedurally generated maps (hills, water pits, pillars, floating islands, caves/overhangs) in four color themes.
 - Destructible bitmap terrain: explosions carve craters, only the changed region is redrawn.
 - Water and map edges are instant death; fall damage; explosion knockback.
-- Weapons: Fist, Minigun (10-round burst), Shotgun (2 shots, strong falloff), Grenade (3 per team, 3 s fuse, bounces), Bazooka (wind-affected).
+- Weapons: Fist, Minigun (10-round burst), Shotgun (2 shots, walk in between, strong falloff), Grenade (3 per team, 3 s fuse, bounces), Bazooka (2 per team, wind-affected), Teleport (1 per team).
+- Supply drops: every 2 turns a plane drops a parachute crate with health, rockets, grenades or a teleport.
+- Double jump = high backflip, handy for climbing out of pits.
 - Host-authoritative networking: the host simulates everything, clients send inputs and render 20 Hz snapshots with interpolation.
 - Keyboard, mouse and touch share one input layer (Pointer Events, multi-touch).
 - Synthesized retro sound effects (Web Audio, no audio files).
@@ -73,12 +75,22 @@ No build step is needed. GitHub Pages serves over HTTPS, which WebRTC and the We
 | 2 | Minigun | 10-bullet burst, slight spread, small damage per bullet |
 | 3 | Shotgun | Two shots per turn, big damage up close, weak at range |
 | 4 | Grenade | Arc throw with power, bounces, 3 s fuse; 3 per team |
-| 5 | Bazooka | Arc shot with power, explodes on impact, pushed by the wind |
+| 5 | Bazooka | Arc shot with power, explodes on impact, pushed by the wind; 2 per team |
+| 6 | Teleport | Select it, then tap/click the destination (snaps to ground below); 1 per team; ends the turn with a retreat |
+
+The shotgun fires twice per turn and you can walk between the two shots.
+
+### Supply crates
+Every second turn a plane flies over and drops a crate on a parachute. Walk into it (or get knocked into it) to collect:
+health (+35 HP for that worm), +1 rocket, +2 grenades or +1 teleport. Explosions destroy crates.
+
+### Stuck in a pit?
+Press jump twice quickly for a **backflip** (about twice as high as a normal jump), or use the **Teleport**.
 
 ### Desktop controls
-- **←/→ or A/D** walk · **W or Enter** jump · **↑/↓** aim
+- **←/→ or A/D** walk · **W or Enter** jump (press twice quickly for a backflip) · **↑/↓** aim
 - **Space**: hold to charge power, release to fire (fires instantly for weapons without power)
-- **1–5** weapon · **Tab** next worm · **C** re-center camera · **+/-** or mouse wheel zoom
+- **1–6** weapon · **Tab** next worm · with Teleport selected, click the destination · **C** re-center camera · **+/-** or mouse wheel zoom
 - Mouse drag or pushing the cursor to a screen edge pans the camera.
 - You can also drag back from your worm with the mouse, like on touch.
 
@@ -86,7 +98,9 @@ No build step is needed. GitHub Pages serves over HTTPS, which WebRTC and the We
 - Play in landscape (a “Rotate your device” overlay appears in portrait).
 - **Slingshot aiming**: touch near your worm and drag *backwards*. Direction = angle, length = power,
   a dotted line previews the flight (without wind). Let go to fire.
-- Bottom-left: **◀ ▶** walk (hold), **JUMP**. Bottom-right: weapon picker and **FIRE** (repeats your last angle/power; for the Fist just tap it).
+- Bottom-left: **◀ ▶** walk (hold), **JUMP** (double-tap = backflip).
+- Bottom-right: **▲ ▼** aim (hold), weapon picker and **FIRE** (fires with the current aim and last power; for the Fist just tap it).
+- Teleport: pick it in the weapon picker, then tap the destination on the map.
 - One-finger drag on the map pans, pinch zooms, **◎** snaps back to your worm.
 - Tip: in Safari use **Share → Add to Home Screen** to play full-screen without browser bars.
 

@@ -1,7 +1,14 @@
 // Canvas renderer: camera, terrain bitmap, background, worms, projectiles, particles, aim UI.
 import { WORLD, PHYS } from './config.js';
 import { noise1 } from './terrain.js';
-import { WEAPONS, W_FIST, W_MINIGUN, W_SHOTGUN, W_GRENADE, W_BAZOOKA, aimVector, previewTrajectory } from './weapons.js';
+import { WEAPONS, W_FIST, W_MINIGUN, W_SHOTGUN, W_GRENADE, W_BAZOOKA, W_TELEPORT, aimVector, previewTrajectory } from './weapons.js';
+
+const CRATE_STYLE = [
+  { box: '#f4f4f4', mark: '#e02b2b' },  // health
+  { box: '#6f7f3a', mark: '#ffd23a' },  // rockets
+  { box: '#3f8a2c', mark: '#ffffff' },  // grenades
+  { box: '#7b3fe4', mark: '#ffe35a' },  // teleport
+];
 
 export const THEMES = [
   { name: 'Meadow', sky: ['#5fb8ff', '#d9f2ff'], hills: ['#9fd3b4', '#76b894'], dirt: [139, 90, 43], dirt2: [118, 74, 34], top: [80, 186, 64], top2: [150, 230, 96], edge: [58, 34, 14], water: ['rgba(40,110,215,0.88)', '#153f8f'] },
@@ -254,6 +261,17 @@ export class Renderer {
       case 'select':
         this.cam.follow = true;
         break;
+      case 'pickup':
+        this.particles.push({ type: 'text', x: ev.x, y: ev.y - 20, text: ev.text, color: '#ffe35a', life: 1.6, max: 1.6, vy: -26, size: 16 });
+        for (let i = 0; i < 10; i++) this.spark(ev.x, ev.y, '#ffe35a');
+        break;
+      case 'tele':
+        for (const [x, y] of [[ev.x1, ev.y1], [ev.x2, ev.y2]]) {
+          this.particles.push({ type: 'ring', x, y, r: 4, r2: 30, life: 0.5, max: 0.5, color: '#b98cff' });
+          for (let i = 0; i < 12; i++) this.spark(x, y, '#d8bfff');
+        }
+        this.cam.follow = true;
+        break;
     }
   }
 
@@ -403,8 +421,10 @@ export class Renderer {
       this.drawWorm(ctx, w, isActive && aim ? aim : null, isActive && myTurnPhase ? view.weapon : -1);
     }
 
-    // Projectiles.
+    // Projectiles, supply crates and the supply plane.
     for (const p of view.projectiles) this.drawProjectile(ctx, p);
+    for (const c of view.crates || []) this.drawCrate(ctx, c);
+    if (view.plane) this.drawPlane(ctx, view.plane);
 
     // Aim helpers.
     if (active && aim && myTurnPhase) this.drawAim(ctx, active, aim, view.weapon, local);
@@ -656,6 +676,10 @@ export class Renderer {
         ctx.fillStyle = '#e02b2b';
         ctx.beginPath(); ctx.arc(8, 0, 4.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         break;
+      case W_TELEPORT:
+        ctx.fillStyle = `rgba(160,100,255,${0.6 + 0.3 * Math.sin(this.time * 8)})`;
+        ctx.beginPath(); ctx.arc(8, 0, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        break;
     }
     ctx.restore();
   }
@@ -708,7 +732,88 @@ export class Renderer {
     }
   }
 
+  drawCrate(ctx, c) {
+    const st = CRATE_STYLE[c.kind] || CRATE_STYLE[0];
+    const x = c.x, y = c.y;
+    if (c.chute) {
+      // Parachute canopy and lines.
+      const sway = Math.sin(this.time * 2 + c.id) * 3;
+      ctx.strokeStyle = 'rgba(40,40,40,0.8)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x - 7, y - 7); ctx.lineTo(x - 16 + sway, y - 30);
+      ctx.moveTo(x + 7, y - 7); ctx.lineTo(x + 16 + sway, y - 30);
+      ctx.moveTo(x, y - 7); ctx.lineTo(x + sway, y - 34);
+      ctx.stroke();
+      ctx.fillStyle = '#ff5a3c';
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(x - 18 + sway, y - 30);
+      ctx.quadraticCurveTo(x + sway, y - 58, x + 18 + sway, y - 30);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(x - 6 + sway, y - 30);
+      ctx.quadraticCurveTo(x + sway, y - 52, x + 6 + sway, y - 30);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = st.box;
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1.4;
+    ctx.fillRect(x - 8, y - 7, 16, 15);
+    ctx.strokeRect(x - 8, y - 7, 16, 15);
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.moveTo(x - 8, y - 2); ctx.lineTo(x + 8, y - 2); ctx.stroke();
+    ctx.fillStyle = st.mark;
+    if (c.kind === 0) {
+      ctx.fillRect(x - 1.8, y - 5, 3.6, 11);
+      ctx.fillRect(x - 5.5, y - 1.3, 11, 3.6);
+    } else if (c.kind === 1) {
+      ctx.beginPath(); ctx.moveTo(x - 5, y - 1); ctx.lineTo(x + 3, y - 1); ctx.lineTo(x + 6, y + 0.5); ctx.lineTo(x + 3, y + 2); ctx.lineTo(x - 5, y + 2); ctx.closePath(); ctx.fill();
+    } else if (c.kind === 2) {
+      ctx.beginPath(); ctx.arc(x, y + 1, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillRect(x - 1.5, y - 5, 3, 3);
+    } else {
+      ctx.font = '900 11px system-ui, sans-serif';
+      ctx.fillText('?', x - 3, y + 5);
+    }
+  }
+
+  drawPlane(ctx, p) {
+    ctx.save();
+    ctx.translate(p.x, p.y + Math.sin(this.time * 3) * 2);
+    ctx.scale(p.dir, 1);
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1.5;
+    // Tail and fuselage.
+    ctx.fillStyle = '#e8412f';
+    ctx.beginPath();
+    ctx.moveTo(-34, -4); ctx.lineTo(-40, -16); ctx.lineTo(-30, -16); ctx.lineTo(-22, -5);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 32, 8, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Cockpit.
+    ctx.fillStyle = '#9fe3ff';
+    ctx.beginPath(); ctx.ellipse(8, -6, 7, 4, 0, Math.PI, 0); ctx.fill(); ctx.stroke();
+    // Wings.
+    ctx.fillStyle = '#ffd23a';
+    ctx.fillRect(-10, -3, 22, 5);
+    ctx.strokeRect(-10, -3, 22, 5);
+    ctx.fillRect(-8, 6, 18, 4);
+    ctx.strokeRect(-8, 6, 18, 4);
+    // Propeller blur.
+    ctx.fillStyle = 'rgba(60,60,60,0.5)';
+    ctx.beginPath(); ctx.ellipse(34, 0, 2.5, 12 * Math.abs(Math.sin(this.time * 40)) + 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
   drawAim(ctx, w, aim, weapon, local) {
+    if (weapon === W_TELEPORT) return;
     const d = aimVector(aim.elev, aim.facing);
     const cx = w.x, cy = w.y - 2;
     // Trajectory preview (my turn, no wind).
@@ -772,7 +877,7 @@ export class Renderer {
           break;
         case 'ring':
           ctx.globalAlpha = k;
-          ctx.strokeStyle = '#ffae3a';
+          ctx.strokeStyle = p.color || '#ffae3a';
           ctx.lineWidth = 3 * k + 1;
           ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.r2 - p.r) * (1 - k), 0, Math.PI * 2); ctx.stroke();
           break;

@@ -455,6 +455,9 @@ function processEvent(ev, fresh) {
     case 'bounce': sfx.play('bounce', vol); break;
     case 'splash': sfx.play('splash', vol); break;
     case 'jump': sfx.play('jump', vol); break;
+    case 'pickup': sfx.play('pickup', vol); break;
+    case 'tele': sfx.play('teleport'); break;
+    case 'plane': sfx.play('plane'); ui.toast('Supply drop incoming!'); break;
     case 'dmg': {
       const now = performance.now();
       if (now - lastOuch > 250) { lastOuch = now; sfx.play('ouch', vol); }
@@ -578,6 +581,7 @@ requestAnimationFrame(frame);
 
 // Expose a tiny debug handle for local testing.
 window.__ww = S;
+window.__wwRenderer = renderer;
 window.__wwScreen = () => {
   const v = S.view;
   const w = v && v.worms.find(o => o.id === v.activeWorm);

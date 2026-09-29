@@ -362,6 +362,8 @@ body.touch.my-turn .tc { display: flex; }
 }
 .tc-btn.pressed, .tc-btn:active { background: rgba(255, 255, 255, 0.45); transform: none; box-shadow: none; }
 .tc-small { width: 78px; font-size: 17px; }
+.tc-aim { display: flex; flex-direction: column; gap: 8px; }
+.tc-half { width: 56px; height: 46px; font-size: 20px; }
 .tc-fire { width: 78px; height: 78px; border-radius: 50%; background: rgba(255, 70, 50, 0.55); font-size: 18px; }
 .tc-fire.pressed { background: rgba(255, 70, 50, 0.85); }
 #btn-weapon svg { width: 40px; height: 40px; }
@@ -428,7 +430,7 @@ body.touch.in-game .tc-center { display: block; }
   touch-action: none;
 }
 
-#picker-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; max-width: 620px; }
+#picker-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; max-width: 720px; }
 .picker-item {
   position: relative;
   width: 104px;

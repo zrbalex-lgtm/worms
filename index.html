@@ -50,6 +50,10 @@
       <button id="btn-jump" class="tc-btn tc-small" aria-label="Jump">JUMP</button>
     </div>
     <div id="tc-right" class="tc">
+      <div class="tc-aim">
+        <button id="btn-aim-up" class="tc-btn tc-half" aria-label="Aim up">▲</button>
+        <button id="btn-aim-down" class="tc-btn tc-half" aria-label="Aim down">▼</button>
+      </div>
       <button id="btn-weapon" class="tc-btn" aria-label="Weapons"></button>
       <button id="btn-fire" class="tc-btn tc-fire" aria-label="Fire">FIRE</button>
     </div>
@@ -74,8 +78,9 @@
       <details class="controls-help">
         <summary>How to play</summary>
         <ul>
-          <li><b>Keyboard:</b> ←/→ or A/D walk · W/Enter jump · ↑/↓ aim · hold &amp; release Space to fire · 1–5 weapons · Tab switch worm · drag or screen edges to pan · wheel zooms · C recenters</li>
-          <li><b>Touch:</b> drag back from your worm like a slingshot and let go to fire · buttons walk, jump, pick weapons and fire · drag to pan, pinch to zoom · tap one of your worms to switch at the start of a turn</li>
+          <li><b>Keyboard:</b> ←/→ or A/D walk · W/Enter jump (press twice fast for a high backflip) · ↑/↓ aim · hold &amp; release Space to fire · 1–6 weapons · Tab switch worm · drag or screen edges to pan · wheel zooms · C recenters</li>
+          <li><b>Touch:</b> drag back from your worm like a slingshot and let go to fire, or aim with ▲/▼ and press FIRE · double-tap JUMP for a backflip · drag to pan, pinch to zoom · tap one of your worms to switch at the start of a turn</li>
+          <li>Ammo per team: Bazooka 2, Grenade 3, Teleport 1 (pick Teleport, then tap/click the destination). Every 2 turns a plane drops a crate: health, rockets, grenades or a teleport — walk into it to collect.</li>
           <li>Fire ends your turn after a 3 s retreat. Water and map edges are deadly. Last team standing wins.</li>
         </ul>
       </details>
@@ -177,8 +182,9 @@
   <div id="help-overlay" class="overlay hidden">
     <div class="panel help">
       <h2>Controls</h2>
-      <p><b>Keyboard</b>: ←/→ or A/D walk · W or Enter jump · ↑/↓ aim · hold Space for power, release to fire · 1 Fist · 2 Minigun · 3 Shotgun · 4 Grenade · 5 Bazooka · Tab next worm · C center camera · mouse drag / screen edges pan · wheel zoom</p>
-      <p><b>Touch</b>: drag back from your worm (slingshot) and release to fire · ◀ ▶ walk · JUMP · weapon button · FIRE repeats your last aim · ◎ recenters · drag map to pan · pinch to zoom · tap your worm to switch before acting</p>
+      <p><b>Keyboard</b>: ←/→ or A/D walk · W or Enter jump (twice fast = backflip) · ↑/↓ aim · hold Space for power, release to fire · 1 Fist · 2 Minigun · 3 Shotgun · 4 Grenade · 5 Bazooka · 6 Teleport (then click the destination) · Tab next worm · C center camera · mouse drag / screen edges pan · wheel zoom</p>
+      <p><b>Touch</b>: drag back from your worm (slingshot) and release to fire · ▲ ▼ aim · FIRE shoots with the current aim and last power · ◀ ▶ walk · JUMP (double-tap = backflip) · Teleport: pick it, then tap the destination · ◎ recenters · drag map to pan · pinch to zoom · tap your worm to switch before acting</p>
+      <p>Crates dropped by the plane give health, rockets, grenades or a teleport — walk into them.</p>
       <p class="muted">Tap anywhere to close.</p>
     </div>
   </div>

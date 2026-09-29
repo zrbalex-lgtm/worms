@@ -1,7 +1,7 @@
 // Unified input: keyboard, mouse and touch (Pointer Events) mapped to game actions.
 // Actions sent to the game: move {dir}, jump, aim {elev, facing?, pw?}, fire {elev, facing?, pw},
 // weapon {w}, switch {id?}. Camera panning/zooming is local only.
-import { WEAPONS } from './weapons.js';
+import { WEAPONS, W_TELEPORT } from './weapons.js';
 
 const AIM_SPEED = 1.3;        // radians per second for keyboard aiming
 const CHARGE_TIME = 1.5;      // seconds to reach full power
@@ -19,6 +19,8 @@ export class Input {
     this.keys = new Set();
     this.btnLeft = false;
     this.btnRight = false;
+    this.btnAimUp = false;
+    this.btnAimDown = false;
     this.lastMove = 0;
     this.elev = 0.6;
     this.power = 0.65;       // last used power (fire button reuses it)
@@ -75,6 +77,7 @@ export class Input {
 
   fire(power, facing) {
     if (!this.canAct()) return;
+    if (this.currentWeapon() === W_TELEPORT) { this.ui.toast('Tap the spot where you want to teleport'); return; }
     const a = { a: 'fire', elev: this.elev, pw: power };
     if (facing) a.facing = facing;
     if (WEAPONS[this.currentWeapon()].usesPower) this.power = power;
@@ -105,6 +108,8 @@ export class Input {
     this.hold('btn-left', () => { this.btnLeft = true; }, () => { this.btnLeft = false; });
     this.hold('btn-right', () => { this.btnRight = true; }, () => { this.btnRight = false; });
     this.hold('btn-jump', () => { if (this.canMove()) this.h.send({ a: 'jump' }); });
+    this.hold('btn-aim-up', () => { this.btnAimUp = true; }, () => { this.btnAimUp = false; this.aimDirty = true; });
+    this.hold('btn-aim-down', () => { this.btnAimDown = true; }, () => { this.btnAimDown = false; this.aimDirty = true; });
     this.hold('btn-fire', () => {
       if (!this.canAct()) return;
       const w = this.currentWeapon();
@@ -177,7 +182,7 @@ export class Input {
       if (e.repeat) return;
       if (code === 'KeyW' || k === 'Enter') { if (this.canMove()) this.h.send({ a: 'jump' }); }
       else if (k === 'Tab') { if (this.canAct()) this.h.send({ a: 'switch' }); }
-      else if (/^Digit[1-5]$/.test(code) || /^Numpad[1-5]$/.test(code)) {
+      else if (/^Digit[1-6]$/.test(code) || /^Numpad[1-6]$/.test(code)) {
         if (this.canAct()) { this.h.send({ a: 'weapon', w: Number(code.slice(-1)) - 1 }); this.h.sfx('select'); }
       } else if (k === ' ') {
         if (!this.canAct()) return;
@@ -220,7 +225,7 @@ export class Input {
     if (this.pointers.size > 2) { p.mode = 'ignore'; return; }
 
     // Start a slingshot when grabbing near the active worm during my turn.
-    if (this.canAct()) {
+    if (this.canAct() && this.currentWeapon() !== W_TELEPORT) {
       const w = this.h.activeWorm();
       if (w) {
         const s = this.r.wormScreen(w);
@@ -309,11 +314,11 @@ export class Input {
   onTap(x, y) {
     if (!this.canAct()) return;
     const v = this.h.getView();
-    if (!v || v.locked) return;
+    if (!v) return;
     let best = null;
     let bestD = 30;
     for (const w of v.worms) {
-      if (!w.alive || w.team !== this.h.myTeam()) continue;
+      if (!w.alive || w.team !== this.h.myTeam() || v.locked) continue;
       const s = this.r.wormScreen(w);
       const d = Math.hypot(s.x - x, s.y - 2 - y);
       if (d < bestD) { best = w; bestD = d; }
@@ -321,6 +326,12 @@ export class Input {
     if (best && best.id !== v.activeWorm) {
       this.h.send({ a: 'switch', id: best.id });
       this.h.sfx('select');
+      return;
+    }
+    // Teleport: the tap position is the destination.
+    if (v.weapon === W_TELEPORT && !best) {
+      const p = this.r.screenToWorld(x, y);
+      this.h.send({ a: 'fire', tx: Math.round(p.x), ty: Math.round(p.y) });
     }
   }
 
@@ -341,7 +352,7 @@ export class Input {
 
     // Keyboard aiming.
     if (this.canAct()) {
-      const aimDir = (this.keys.has('ArrowUp') ? 1 : 0) - (this.keys.has('ArrowDown') ? 1 : 0);
+      const aimDir = (this.keys.has('ArrowUp') || this.btnAimUp ? 1 : 0) - (this.keys.has('ArrowDown') || this.btnAimDown ? 1 : 0);
       if (aimDir) {
         this.elev = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.elev + aimDir * AIM_SPEED * dt));
         this.aimDirty = true;

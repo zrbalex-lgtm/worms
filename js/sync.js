@@ -28,6 +28,11 @@ function decode(s, setup) {
   for (let i = 0; i < s.p.length; i += 5) {
     projectiles.push({ id: s.p[i], type: s.p[i + 1], x: s.p[i + 2], y: s.p[i + 3], a: s.p[i + 4] });
   }
+  const crates = [];
+  for (let i = 0; i < (s.c || []).length; i += 5) {
+    crates.push({ id: s.c[i], x: s.c[i + 1], y: s.c[i + 2], kind: s.c[i + 3], chute: !!s.c[i + 4] });
+  }
+  const plane = s.pl ? { x: s.pl[0], y: s.pl[1], dir: s.pl[2] } : null;
   return {
     t: s.tm,
     phase: s.ph,
@@ -41,7 +46,9 @@ function decode(s, setup) {
     shotsLeft: s.sl,
     locked: !!s.lk,
     winner: s.win,
-    grenades: s.tg,
+    ammo: s.ta,
+    crates,
+    plane,
     connected: s.tc.map(Boolean),
     worms,
     projectiles,
@@ -102,8 +109,14 @@ export class ClientSync {
       if (!p) return pr;
       return { ...pr, x: lerp(p.x, pr.x, k), y: lerp(p.y, pr.y, k), a: pr.type === 2 ? lerpAngle(p.a, pr.a, k) : pr.a };
     });
+    const prevC = new Map(a.crates.map(c => [c.id, c]));
+    const crates = b.crates.map(c => {
+      const p = prevC.get(c.id);
+      return p ? { ...c, x: lerp(p.x, c.x, k), y: lerp(p.y, c.y, k) } : c;
+    });
+    const plane = b.plane && a.plane ? { ...b.plane, x: lerp(a.plane.x, b.plane.x, k) } : b.plane;
     // Discrete fields come from the older snapshot so they line up with the events.
-    return { ...a, t: rt, timeLeft: lerp(a.timeLeft, b.timeLeft, k), worms, projectiles };
+    return { ...a, t: rt, timeLeft: lerp(a.timeLeft, b.timeLeft, k), worms, projectiles, crates, plane };
   }
 
   // Events whose host time has been reached by the render clock.

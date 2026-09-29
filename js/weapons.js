@@ -8,13 +8,15 @@ export const W_MINIGUN = 1;
 export const W_SHOTGUN = 2;
 export const W_GRENADE = 3;
 export const W_BAZOOKA = 4;
+export const W_TELEPORT = 5;
 
 export const WEAPONS = [
   { id: 'fist', name: 'Fist', usesPower: false, kind: 'melee' },
   { id: 'minigun', name: 'Minigun', usesPower: false, kind: 'hitscan', range: 900 },
   { id: 'shotgun', name: 'Shotgun', usesPower: false, kind: 'hitscan', range: 420, shots: 2 },
   { id: 'grenade', name: 'Grenade', usesPower: true, kind: 'projectile', ammo: 3 },
-  { id: 'bazooka', name: 'Bazooka', usesPower: true, kind: 'projectile' },
+  { id: 'bazooka', name: 'Bazooka', usesPower: true, kind: 'projectile', ammo: 2 },
+  { id: 'teleport', name: 'Teleport', usesPower: false, kind: 'target', ammo: 1 },
 ];
 
 const GRENADE = { r: 4, minSpeed: 120, maxSpeed: 680, fuse: 3, blast: 48, dmg: 50, kb: 400, e: 0.5, f: 0.85 };

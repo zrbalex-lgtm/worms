@@ -136,6 +136,17 @@ export class Sfx {
       case 'click':
         this.tone(0.04, { wave: 'triangle', f0: 700, vol: 0.12 });
         break;
+      case 'pickup':
+        [660, 880, 1320].forEach((f, i) => this.tone(0.1, { wave: 'triangle', f0: f, vol: 0.18, delay: i * 0.07 }));
+        break;
+      case 'teleport':
+        this.tone(0.35, { wave: 'sine', f0: 300, f1: 1800, vol: 0.25 });
+        this.tone(0.35, { wave: 'triangle', f0: 1800, f1: 400, vol: 0.12, delay: 0.2 });
+        break;
+      case 'plane':
+        this.noise(2.2, { type: 'bandpass', f0: 220, f1: 160, q: 4, vol: 0.35, attack: 0.6 });
+        this.tone(2.2, { wave: 'sawtooth', f0: 70, f1: 60, vol: 0.05, attack: 0.6 });
+        break;
       case 'win': {
         const notes = [523, 659, 784, 1047, 784, 1047];
         notes.forEach((f, i) => this.tone(i === notes.length - 1 ? 0.6 : 0.15, { wave: 'square', f0: f, vol: 0.14, delay: i * 0.14 }));
