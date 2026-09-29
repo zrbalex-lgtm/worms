@@ -71,7 +71,8 @@ export class BotManager {
     if (key !== this.key) {
       this.key = key;
       const lv = BOT_LEVELS[team.bot] || BOT_LEVELS.pro;
-      this.s = { lv, team, state: 'think', t: rand(lv.think[0], lv.think[1]), walks: 0, plan: null, gen: null, shots: 0 };
+      this.s = { lv, team, state: 'think', t: rand(lv.think[0], lv.think[1]), walks: 0, plan: null, gen: null, shots: 0,
+        startX: g.active ? g.active.x : 0, startY: g.active ? g.active.y : 0 };
     }
     const s = this.s;
     const w = g.active;
@@ -88,15 +89,21 @@ export class BotManager {
       case 'between': // waiting between shotgun shots
         if (s.t <= 0 && g.phase === 'turn') {
           const next = this.bestHitscan(W_SHOTGUN);
-          if (next) { s.plan = next; this.beginAim(); } else { s.state = 'done'; }
+          if (next) { s.plan = next; this.beginAim(); } else { s.state = 'skip'; s.t = 0.6; }
         }
         break;
       case 'retreat': this.stepRetreat(dt); break;
+      case 'flip': this.stepFlip(dt); break;
       case 'skip':
         if (s.t <= 0) { this.send({ a: 'skip' }); s.state = 'done'; }
         break;
       case 'done':
         break;
+    }
+    // Safety net: a bot that has finished but still owns the turn ends it.
+    if (s.state === 'done' && g.phase === 'turn') {
+      s.idleT = (s.idleT || 0) + dt;
+      if (s.idleT > 1.5) { s.idleT = -1e9; this.send({ a: 'skip' }); }
     }
     // Out of time: fire whatever we have.
     if (g.phase === 'turn' && g.timeLeft < 3 && (s.state === 'plan' || s.state === 'walk' || s.state === 'think')) {
@@ -147,7 +154,8 @@ export class BotManager {
       s.gapJumped = false;
       return;
     }
-    if ((!pick || pick.score <= 0) && s.lv.teleport && s.team.ammo[W_TELEPORT] !== 0) {
+    const stuck = Math.hypot(w.x - s.startX, w.y - s.startY) < 60;
+    if ((!pick || pick.score <= 0) && stuck && s.lv.teleport && s.team.ammo[W_TELEPORT] !== 0) {
       const spot = this.teleportSpot(w, nearest);
       if (spot) {
         this.send({ a: 'weapon', w: W_TELEPORT });
@@ -402,11 +410,49 @@ export class BotManager {
       if (Math.abs(w.x - s.lastX) < 0.3) s.stuckT += dt; else s.stuckT = 0;
       s.lastX = w.x;
       if (s.stuckT > 0.35) {
-        // Blocked by a wall: try jumping over it, then give up.
+        // Blocked by a wall: jump; if that isn't enough, backflip (about twice as high); then give up.
         s.stuckT = 0;
-        if (s.jumps++ < 2) this.send({ a: 'jump' });
+        s.jumps++;
+        if (s.jumps === 1) this.send({ a: 'jump' });
+        else if (s.jumps <= 3) this.startBackflip(s.walkDir);
         else s.t = 0;
       }
+    }
+  }
+
+  // A backflip goes backwards, so face away from where we want to go, then double-jump.
+  startBackflip(dir) {
+    const s = this.s;
+    this.send({ a: 'move', dir: 0 });
+    this.send({ a: 'aim', facing: -dir });
+    s.state = 'flip';
+    s.flipStage = 0;
+    s.flipT = 0;
+    s.flipDir = dir;
+  }
+
+  stepFlip(dt) {
+    const s = this.s;
+    const w = this.game.active;
+    s.flipT += dt;
+    if (s.flipStage === 0 && s.flipT > 0.1) {
+      this.send({ a: 'jump' });
+      s.flipStage = 1;
+      s.flipT = 0;
+    } else if (s.flipStage === 1 && s.flipT > 0.15) {
+      this.send({ a: 'jump' }); // second press right after the first = backflip
+      s.flipStage = 2;
+      s.flipT = 0;
+    } else if (s.flipStage === 2 && s.flipT > 0.3 && w.onGround) {
+      // Landed: keep walking the same way.
+      s.state = 'walk';
+      s.walkDir = s.flipDir;
+      s.t = Math.max(s.t, 1.2);
+      s.lastX = w.x;
+      s.stuckT = 0;
+    } else if (s.flipT > 3) {
+      s.state = 'think';
+      s.t = 0.2;
     }
   }
 

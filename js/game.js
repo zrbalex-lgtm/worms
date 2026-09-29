@@ -401,6 +401,7 @@ export class Game {
   }
 
   knock(w, vx, vy) {
+    w.jumpVx = 0;
     if (w.gone) return;
     w.onGround = false;
     w.knocked = true;
@@ -460,6 +461,7 @@ export class Game {
           w.knocked = false;
           w.walking = false;
           w.vx = w.facing * PHYS.JUMP_VX;
+          w.jumpVx = w.vx;
           w.vy = PHYS.JUMP_VY;
           w.fallStartY = w.y;
           w.jumpT = this.time;
@@ -469,7 +471,8 @@ export class Game {
         } else if (this.canMove() && !w.onGround && !w.knocked && !w.flipped && this.time - (w.jumpT ?? -9) < 0.4) {
           // Second press right after a jump: a high backflip to escape pits.
           w.flipped = true;
-          w.vx = -w.facing * 45;
+          w.vx = -w.facing * 70;
+          w.jumpVx = w.vx;
           w.vy = PHYS.JUMP_VY * 1.4;
           this.emit({ k: 'jump', id: w.id, flip: 1 });
         }
@@ -602,8 +605,14 @@ export class Game {
     this.updateDrops(dt);
     this.physics(dt);
 
+    const acting = this.phase === 'turn' || this.phase === 'retreat' || this.phase === 'firing';
     // Active worm died or vanished during its own turn.
-    if (w && !w.alive && (this.phase === 'turn' || this.phase === 'retreat' || this.phase === 'firing')) {
+    if (w && !w.alive && acting) {
+      this.bursts.length = 0;
+      this.beginSettle();
+    }
+    // Only one team (or nobody) left: stop the turn so the game can end right away.
+    if (acting && this.teams.filter(t => this.teamAlive(t.idx)).length <= 1) {
       this.bursts.length = 0;
       this.beginSettle();
     }

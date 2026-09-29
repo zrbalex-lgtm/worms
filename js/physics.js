@@ -124,6 +124,7 @@ export function walkWorm(terrain, w, dir, dt) {
     if (!collides(terrain, w.x, w.y + 1, R)) {
       // Walked off a ledge.
       w.onGround = false;
+      w.jumpVx = 0;
       w.fallStartY = w.y;
       w.vx = dir * PHYS.WALK_SPEED * 0.7;
       w.vy = 0;
@@ -150,6 +151,11 @@ export function updateWorm(terrain, w, dt) {
     w.vy = 0;
   }
   w.fallStartY = Math.min(w.fallStartY, w.y);
+  // A jump that slid up a wall resumes its sideways motion once it clears the edge.
+  if (!w.knocked && w.jumpVx && Math.abs(w.vx) < Math.abs(w.jumpVx) * 0.5 &&
+      !collides(terrain, w.x + Math.sign(w.jumpVx) * 2, w.y, R)) {
+    w.vx = w.jumpVx;
+  }
   const ox = w.x;
   const oy = w.y;
   const hit = sweep(terrain, w, dt, R, 0, PHYS.GRAVITY);
@@ -175,6 +181,7 @@ export function updateWorm(terrain, w, dt) {
     w.vx = 0;
     w.vy = 0;
     w.knocked = false;
+    w.jumpVx = 0;
     settleOnGround(terrain, w);
     if (fall > PHYS.FALL_SAFE) {
       return Math.min(PHYS.FALL_DMG_MAX, Math.round((fall - PHYS.FALL_SAFE) * PHYS.FALL_DMG_PER_PX));
@@ -183,7 +190,8 @@ export function updateWorm(terrain, w, dt) {
   }
   const vn = w.vx * n.x + w.vy * n.y;
   if (vn < 0) {
-    reflect(w, n, w.knocked ? PHYS.BOUNCE : 0.1, 0.8);
+    // Knocked worms bounce; jumping worms slide along walls without losing their upward speed.
+    reflect(w, n, w.knocked ? PHYS.BOUNCE : 0, w.knocked ? 0.8 : 1);
   } else {
     // Stuck inside a surface while moving away: nudge out.
     w.x += n.x;
