@@ -16,6 +16,8 @@ Works on desktop browsers and on iPhone/iPad (iOS Safari), in landscape.
 - Weapons: Fist, Minigun (10-round burst), Shotgun (2 shots, walk in between, strong falloff), Grenade (3 per team, 3 s fuse, bounces), Bazooka (2 per team, wind-affected), Teleport (1 per team).
 - Supply drops: every 2 turns a plane drops a parachute crate with health, rockets, grenades or a teleport.
 - Double jump = high backflip, handy for climbing out of pits.
+- Computer players: add bots in the lobby with three levels — Rookie, Professional, Killer.
+- Sudden death: after 8 rounds the water rises every turn, so every game ends.
 - Host-authoritative networking: the host simulates everything, clients send inputs and render 20 Hz snapshots with interpolation.
 - Keyboard, mouse and touch share one input layer (Pointer Events, multi-touch).
 - Synthesized retro sound effects (Web Audio, no audio files).
@@ -33,6 +35,7 @@ js/terrain.js           bitmap terrain, procedural generation, crater carving, R
 js/physics.js           bitmap collision, walking/climbing, falling, bouncing
 js/weapons.js           weapon definitions, firing, projectiles, trajectory preview
 js/game.js              host-side simulation: turns, damage, victory, snapshots
+js/bot.js               computer players (run on the host, send the same inputs as humans)
 js/sync.js              client-side snapshot buffer and interpolation
 js/net.js               PeerJS host/client wrappers (+ local BroadcastChannel test transport)
 js/render.js            canvas renderer: camera, terrain, worms, effects, aim UI
@@ -59,7 +62,23 @@ No build step is needed. GitHub Pages serves over HTTPS, which WebRTC and the We
 2. The lobby shows a 6-character **room code** and a **Share link** button (uses the iOS/Android share sheet or copies the link).
 3. Other players press **Join game** and enter the code and their name — or simply open the shared link
    (`…/?room=ABC123`), which prefills the code.
-4. When at least 2 players are in the lobby the host presses **Start**. Up to 4 players.
+4. The host can fill empty slots with **+ Add bot** and pick each bot's level (✕ removes it).
+5. When there are at least 2 teams (players or bots) the host presses **Start**. Up to 4 teams.
+
+### Bots
+Bots run in the host's browser and play with the same rules and weapons as people.
+
+| Level | Plays like |
+|---|---|
+| Rookie | Ignores the wind, aims roughly, picks random decent shots, doesn't retreat |
+| Professional | Accounts for wind, aims well, avoids hurting its own worms, retreats after firing |
+| Killer | Near-perfect aim, searches for the best shot, protects its own team hard |
+
+When they have nothing to shoot at, bots walk toward enemies (jumping over gaps), go for supply crates
+when out of explosives, teleport out of pits, or end their turn early.
+
+### Sudden death
+After 8 full rounds the water rises by 25 px at the start of every turn, so stalemates can't last forever.
 
 ### On your turn
 1. Pick which worm to use: click/tap one of your worms (or press **Tab**) before you move or fire.

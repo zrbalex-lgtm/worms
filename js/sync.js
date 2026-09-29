@@ -47,6 +47,7 @@ function decode(s, setup) {
     locked: !!s.lk,
     winner: s.win,
     ammo: s.ta,
+    waterY: s.wy ?? 1020,
     crates,
     plane,
     connected: s.tc.map(Boolean),
@@ -116,7 +117,7 @@ export class ClientSync {
     });
     const plane = b.plane && a.plane ? { ...b.plane, x: lerp(a.plane.x, b.plane.x, k) } : b.plane;
     // Discrete fields come from the older snapshot so they line up with the events.
-    return { ...a, t: rt, timeLeft: lerp(a.timeLeft, b.timeLeft, k), worms, projectiles, crates, plane };
+    return { ...a, t: rt, timeLeft: lerp(a.timeLeft, b.timeLeft, k), waterY: lerp(a.waterY, b.waterY, k), worms, projectiles, crates, plane };
   }
 
   // Events whose host time has been reached by the render clock.

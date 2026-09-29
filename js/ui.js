@@ -1,5 +1,6 @@
 // DOM user interface: screens, lobby, HUD, weapon picker, toasts and overlays.
 import { WEAPONS, W_TELEPORT } from './weapons.js';
+import { BOT_LEVELS, BOT_LEVEL_KEYS } from './bot.js';
 import { TEAM_COLORS } from './config.js';
 
 const $ = id => document.getElementById(id);
@@ -27,6 +28,10 @@ export class UI {
     this.toastTimer = null;
     this.bannerTimer = null;
     this.buildWeaponPicker();
+    // Lobby bot callbacks, set by main.js.
+    this.onAddBot = null;
+    this.onRemoveBot = null;
+    this.onBotLevel = null;
   }
 
   show(name) {
@@ -66,19 +71,51 @@ export class UI {
     list.innerHTML = '';
     for (const p of players) {
       const li = document.createElement('li');
+      if (p.bot) li.className = 'bot';
       const dot = document.createElement('span');
       dot.className = 'dot';
       dot.style.background = TEAM_COLORS[p.color];
       li.appendChild(dot);
       const name = document.createElement('span');
-      name.textContent = p.name + (p.id === 0 ? ' (host)' : '') + (p.id === myId ? ' — you' : '');
+      name.className = 'pname';
+      name.textContent = (p.bot ? '🤖 ' : '') + p.name + (p.id === 0 ? ' (host)' : '') + (p.id === myId ? ' — you' : '');
       li.appendChild(name);
+      if (p.bot && isHost) {
+        // Difficulty picker and remove button for bots.
+        const sel = document.createElement('select');
+        sel.className = 'bot-level';
+        for (const key of BOT_LEVEL_KEYS) {
+          const o = document.createElement('option');
+          o.value = key;
+          o.textContent = BOT_LEVELS[key].label;
+          if (key === p.bot) o.selected = true;
+          sel.appendChild(o);
+        }
+        sel.onchange = () => this.onBotLevel && this.onBotLevel(p.id, sel.value);
+        li.appendChild(sel);
+        const rm = document.createElement('button');
+        rm.className = 'small bot-remove';
+        rm.textContent = '✕';
+        rm.setAttribute('aria-label', 'Remove bot');
+        rm.onclick = () => this.onRemoveBot && this.onRemoveBot(p.id);
+        li.appendChild(rm);
+      }
       list.appendChild(li);
     }
     for (let i = players.length; i < 4; i++) {
       const li = document.createElement('li');
       li.className = 'empty';
-      li.textContent = 'Waiting for player…';
+      const txt = document.createElement('span');
+      txt.className = 'pname';
+      txt.textContent = 'Waiting for player…';
+      li.appendChild(txt);
+      if (isHost) {
+        const add = document.createElement('button');
+        add.className = 'small add-bot';
+        add.textContent = '+ Add bot';
+        add.onclick = () => this.onAddBot && this.onAddBot('pro');
+        li.appendChild(add);
+      }
       list.appendChild(li);
     }
     $('lobby-settings').textContent =
@@ -87,7 +124,7 @@ export class UI {
     start.classList.toggle('hidden', !isHost);
     start.disabled = players.length < 2;
     $('lobby-status').textContent = isHost
-      ? (players.length < 2 ? 'Share the code or link. You need at least 2 players.' : 'Ready when you are!')
+      ? (players.length < 2 ? 'Share the code or link, or add a bot. You need at least 2 teams.' : 'Ready when you are!')
       : 'Waiting for the host to start…';
   }
 

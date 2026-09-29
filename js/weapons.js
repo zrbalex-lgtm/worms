@@ -131,7 +131,7 @@ function hitscan(game, shooter, x0, y0, dx, dy, range, onHit) {
       onHit(null, d, x, y);
       return;
     }
-    if (y > WORLD.WATER_Y || x < -50 || x > WORLD.W + 50) break;
+    if (y > (game.waterY ?? WORLD.WATER_Y) || x < -50 || x > WORLD.W + 50) break;
   }
   game.emit({ k: 'tracer', x1: Math.round(x0), y1: Math.round(y0), x2: Math.round(x), y2: Math.round(y) });
 }
@@ -221,8 +221,9 @@ export function updateProjectiles(game, dt) {
       }
     }
 
-    if (!remove && (p.y > WORLD.WATER_Y || p.x < -300 || p.x > WORLD.W + 300)) {
-      if (p.y > WORLD.WATER_Y) game.emit({ k: 'splash', x: Math.round(p.x), s: 0 });
+    const waterY = game.waterY ?? WORLD.WATER_Y;
+    if (!remove && (p.y > waterY || p.x < -300 || p.x > WORLD.W + 300)) {
+      if (p.y > waterY) game.emit({ k: 'splash', x: Math.round(p.x), s: 0 });
       remove = true;
     }
     if (remove) game.projectiles.splice(i, 1);

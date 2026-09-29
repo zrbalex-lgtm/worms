@@ -140,6 +140,7 @@ export class Renderer {
     this.dpr = 1;
     this.cam = { x: WORLD.W / 2, y: 600, zoom: 1, follow: true, shake: 0, sx: 0, sy: 0 };
     this.particles = [];
+    this.waterY = WORLD.WATER_Y;
     this.time = 0;
     this.touch = false;
     this.tv = null;
@@ -331,7 +332,7 @@ export class Renderer {
     for (let i = 0; i < n; i++) {
       const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.3;
       const sp = (big ? 200 : 130) + Math.random() * 160;
-      this.particles.push({ type: 'drop', x: x + (Math.random() - 0.5) * 10, y: WORLD.WATER_Y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, size: 2 + Math.random() * 2, life: 1, max: 1, g: 700 });
+      this.particles.push({ type: 'drop', x: x + (Math.random() - 0.5) * 10, y: this.waterY, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, size: 2 + Math.random() * 2, life: 1, max: 1, g: 700 });
     }
   }
 
@@ -346,6 +347,7 @@ export class Renderer {
   frame(view, dt, local) {
     this.time += dt;
     this.lastView = view;
+    this.waterY = view && typeof view.waterY === 'number' ? view.waterY : WORLD.WATER_Y;
     const ctx = this.ctx;
     if (this.tv) this.tv.flush();
     this.updateCamera(view, dt);
@@ -496,7 +498,7 @@ export class Renderer {
       if (p.vy !== undefined) { p.y += p.vy * dt; }
       if (p.g) p.vy += p.g * dt;
       if (p.type === 'smoke') { p.r += dt * 10; p.vx *= 0.98; }
-      if (p.type === 'drop' && p.y > WORLD.WATER_Y + 4 && p.vy > 0) p.life = 0;
+      if (p.type === 'drop' && p.y > this.waterY + 4 && p.vy > 0) p.life = 0;
     }
     this.trimParticles();
   }
@@ -544,7 +546,7 @@ export class Renderer {
   drawWater(ctx, camX, s, W, alpha, offset, color, amp) {
     const x0 = camX - W / 2 / s - 20;
     const x1 = camX + W / 2 / s + 20;
-    const y = WORLD.WATER_Y + offset;
+    const y = this.waterY + offset;
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
     ctx.beginPath();

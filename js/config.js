@@ -1,7 +1,7 @@
 // Shared constants for simulation, rendering and networking.
 
 // Shown in the main menu so players can confirm which build they are running.
-export const VERSION = '1.3';
+export const VERSION = '1.4';
 
 export const WORLD = {
   W: 2600,          // map width in world pixels
@@ -28,6 +28,9 @@ export const TURN = {
   RETREAT: 3,           // seconds of movement allowed after firing
   SETTLE_MIN: 0.8,      // minimum pause between turns
   SETTLE_MAX: 12,       // safety timeout for the settle phase
+  SUDDEN_DEATH_ROUNDS: 8, // after this many rounds the water starts rising every turn
+  WATER_RISE: 25,       // pixels the water rises per turn in sudden death
+  WATER_MIN_Y: 150,     // the water never rises above this line
 };
 
 export const NET = {

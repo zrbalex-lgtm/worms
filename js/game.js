@@ -37,6 +37,7 @@ export function buildSetup(players, settings) {
     playerId: p.id,
     name: p.name,
     color: TEAM_COLORS[p.color ?? i],
+    bot: p.bot || null,
   }));
   const worms = [];
   let id = 1;
@@ -72,12 +73,16 @@ export class Game {
     this.crates = [];
     this.plane = null;
     this.turnCount = 0;
+    this.waterY = WORLD.WATER_Y;
+    this.waterTarget = WORLD.WATER_Y;
+    this.suddenDeath = false;
 
     this.teams = setup.teams.map((t, i) => ({
       idx: i,
       playerId: t.playerId,
       name: t.name,
       color: t.color,
+      bot: t.bot || null,
       connected: true,
       ammo: WEAPONS.map(w => (w.ammo === undefined ? -1 : w.ammo)), // -1 = unlimited
       weapon: W_BAZOOKA,
@@ -184,6 +189,14 @@ export class Game {
     if (!this.hasAmmo(team, team.weapon)) team.weapon = this.fallbackWeapon(team);
     this.turnCount++;
     if (this.turnCount > 1 && this.turnCount % DROP_EVERY === 0) this.launchPlane();
+    // Sudden death: after a number of rounds the water rises every turn to force an ending.
+    if (this.turnCount > TURN.SUDDEN_DEATH_ROUNDS * this.teams.length) {
+      if (!this.suddenDeath) {
+        this.suddenDeath = true;
+        this.emit({ k: 'msg', text: 'Sudden death! The water is rising' });
+      }
+      this.waterTarget = Math.max(TURN.WATER_MIN_Y, this.waterTarget - TURN.WATER_RISE);
+    }
     // Pick the next living worm of this team.
     const own = this.worms.filter(w => w.team === ti);
     let idx = own.findIndex(w => w.id === team.lastWorm);
@@ -272,7 +285,7 @@ export class Game {
     let dropX = null;
     for (let tries = 0; tries < 40 && dropX === null; tries++) {
       const x = 150 + Math.random() * (WORLD.W - 300);
-      for (let y = 0; y < WORLD.WATER_Y - 30; y += 4) {
+      for (let y = 0; y < this.waterY - 30; y += 4) {
         if (this.terrain.solid(Math.round(x), y)) { dropX = x; break; }
       }
     }
@@ -311,7 +324,7 @@ export class Game {
           c.vy = 0;
         }
       }
-      if (c.y > WORLD.WATER_Y + 4 || c.x < -20 || c.x > WORLD.W + 20) {
+      if (c.y > this.waterY + 4 || c.x < -20 || c.x > WORLD.W + 20) {
         this.emit({ k: 'splash', x: Math.round(c.x), s: 0 });
         this.crates.splice(i, 1);
         continue;
@@ -343,7 +356,7 @@ export class Game {
   teleport(w, tx, ty) {
     if (typeof tx !== 'number' || typeof ty !== 'number' || !isFinite(tx) || !isFinite(ty)) return false;
     const R = PHYS.WORM_R;
-    if (tx < R + 2 || tx > WORLD.W - R - 2 || ty < -150 || ty > WORLD.WATER_Y - R - 4) return false;
+    if (tx < R + 2 || tx > WORLD.W - R - 2 || ty < -150 || ty > this.waterY - R - 4) return false;
     let spot = null;
     for (let dy = 0; dy >= -36 && !spot; dy -= 3) {
       for (const dx of [0, -4, 4, -8, 8, -12, 12]) {
@@ -353,7 +366,7 @@ export class Game {
     if (!spot) return false;
     let drop = 0;
     while (drop < 90 && !collides(this.terrain, spot.x, spot.y + 1, R)) { spot.y++; drop++; }
-    if (spot.y > WORLD.WATER_Y - R) return false;
+    if (spot.y > this.waterY - R) return false;
     this.emit({ k: 'tele', x1: Math.round(w.x), y1: Math.round(w.y), x2: spot.x, y2: spot.y });
     w.x = spot.x;
     w.y = spot.y;
@@ -460,6 +473,10 @@ export class Game {
           w.vy = PHYS.JUMP_VY * 1.4;
           this.emit({ k: 'jump', id: w.id, flip: 1 });
         }
+        break;
+      case 'skip':
+        // End the turn early (used by bots with nothing useful to do).
+        if (this.phase === 'turn' || this.phase === 'retreat') this.beginSettle();
         break;
       case 'aim':
         this.applyAim(a);
@@ -580,6 +597,7 @@ export class Game {
       updateBursts(this, dt);
     }
 
+    if (this.waterY > this.waterTarget) this.waterY = Math.max(this.waterTarget, this.waterY - 30 * dt);
     updateProjectiles(this, dt);
     this.updateDrops(dt);
     this.physics(dt);
@@ -603,7 +621,7 @@ export class Game {
       if (w.gone) continue;
       const fallDmg = updateWorm(this.terrain, w, dt);
       if (fallDmg > 0 && w.alive) this.damageWorm(w, fallDmg);
-      if (w.y > WORLD.WATER_Y + 4 || w.x < -PHYS.WORM_R || w.x > WORLD.W + PHYS.WORM_R) {
+      if (w.y > this.waterY + 4 || w.x < -PHYS.WORM_R || w.x > WORLD.W + PHYS.WORM_R) {
         if (w.alive) this.killWorm(w, true);
         else if (!w.gone) { w.gone = true; this.emit({ k: 'splash', x: Math.round(w.x), s: 0 }); }
       }
@@ -645,6 +663,7 @@ export class Game {
       lk: this.turn.acted ? 1 : 0,
       win: this.winner,
       ta: this.teams.map(t => t.ammo),
+      wy: Math.round(this.waterY),
       c: this.crates.flatMap(c => [c.id, r1(c.x), r1(c.y), c.kind, c.chute ? 1 : 0]),
       pl: this.plane ? [r1(this.plane.x), this.plane.y, this.plane.dir] : 0,
       tc: this.teams.map(t => (t.connected ? 1 : 0)),
@@ -670,6 +689,7 @@ export class Game {
       locked: this.turn.acted,
       winner: this.winner,
       ammo: this.teams.map(t => t.ammo),
+      waterY: this.waterY,
       crates: this.crates,
       plane: this.plane,
       connected: this.teams.map(t => t.connected),

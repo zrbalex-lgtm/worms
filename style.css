@@ -200,7 +200,15 @@ label input, label select {
   background: #fff;
   font-weight: 700;
 }
-#lobby-players li.empty { border-style: dashed; opacity: 0.45; font-weight: 400; }
+#lobby-players li.empty { border-style: dashed; font-weight: 400; }
+#lobby-players li.empty .pname { opacity: 0.45; }
+#lobby-players .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lobby-players .add-bot { background: var(--ok); font-size: 14px; padding: 4px 10px; min-height: 36px; }
+#lobby-players .bot-level {
+  font: inherit; font-size: 14px; font-weight: 700;
+  border: 2px solid var(--ink); border-radius: 10px; padding: 4px 6px; min-height: 36px; background: #fff; color: var(--ink);
+}
+#lobby-players .bot-remove { background: #888; font-size: 14px; padding: 0; width: 36px; min-width: 36px; min-height: 36px; }
 #lobby-players .dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink); flex: none; }
 
 .spinner {
@@ -485,7 +493,11 @@ body.touch.in-game .tc-center { display: block; }
   label, .field { margin: 6px 0; }
   .code { font-size: 34px; }
   .row { margin-top: 10px; }
-  #lobby-players li { padding: 5px 10px; margin: 4px 0; }
+  #lobby-players li { padding: 3px 8px; margin: 3px 0; }
+  #screen-lobby h2, #lobby-link { display: none; }
+  .code-box { padding: 4px 8px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .code-box .code { font-size: 28px; }
+  #lobby-settings, #lobby-status { margin: 3px 0; font-size: 12px; }
   #turn-banner { font-size: 14px; }
   #timer { min-width: 42px; height: 42px; font-size: 22px; }
   #team-bars { min-width: 100px; padding: 4px 6px; }

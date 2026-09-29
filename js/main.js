@@ -9,6 +9,7 @@ import { Input } from './input.js';
 import { UI } from './ui.js';
 import { Sfx } from './audio.js';
 import { W_MINIGUN, W_SHOTGUN, W_GRENADE, W_BAZOOKA } from './weapons.js';
+import { BotManager, BOT_LEVELS } from './bot.js';
 
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -32,6 +33,8 @@ const S = {
   setup: null,
   terrain: null,
   game: null,            // host only
+  bots: null,            // host only: AI driver for bot teams
+  nextBotId: 100,
   sync: null,            // client only
   view: null,
   hostFx: [],            // host: visual events waiting for the next frame
@@ -130,6 +133,12 @@ function initMenus() {
   $('join-name').addEventListener('keydown', e => { if (e.key === 'Enter') joinGame(); });
 
   $('btn-start').onclick = () => { if (S.mode === 'host' && S.players.length >= 2) hostStartGame(); };
+  ui.onAddBot = level => addBot(level);
+  ui.onRemoveBot = id => { S.players = S.players.filter(p => p.id !== id); renameBots(); broadcastLobby(); };
+  ui.onBotLevel = (id, level) => {
+    const p = S.players.find(q => q.id === id);
+    if (p && BOT_LEVELS[level]) { p.bot = level; renameBots(); broadcastLobby(); }
+  };
   $('btn-leave').onclick = () => leaveToMenu();
   $('btn-share').onclick = async () => {
     const link = shareLink(S.code);
@@ -197,6 +206,7 @@ async function createGame() {
   S.mode = 'host';
   S.myId = 0;
   S.players = [{ id: 0, name, color: 0 }];
+  S.nextBotId = 100;
   net.acceptJoin = () => {
     if (S.inGame) return { ok: false, reason: 'This game has already started.' };
     if (S.players.length >= NET.MAX_PLAYERS) return { ok: false, reason: 'This room is full (4 players).' };
@@ -240,6 +250,30 @@ async function createGame() {
   ui.show('lobby');
 }
 
+// ---------- Bots (host only) ----------
+
+function addBot(level) {
+  if (S.mode !== 'host' || S.inGame || S.players.length >= NET.MAX_PLAYERS) return;
+  const used = new Set(S.players.map(p => p.color));
+  let color = 0;
+  while (used.has(color)) color++;
+  S.players.push({ id: S.nextBotId++, name: '', color, bot: level });
+  renameBots();
+  broadcastLobby();
+  sfx.play('select');
+}
+
+// Bot names follow their level ("Killer Bot", "Killer Bot 2", ...).
+function renameBots() {
+  const counts = {};
+  for (const p of S.players) {
+    if (!p.bot) continue;
+    const base = BOT_LEVELS[p.bot].label + ' Bot';
+    counts[base] = (counts[base] || 0) + 1;
+    p.name = counts[base] > 1 ? `${base} ${counts[base]}` : base;
+  }
+}
+
 function broadcastLobby() {
   if (S.mode !== 'host') return;
   const lobby = { t: 'lobby', players: S.players, settings: S.settings, code: S.code };
@@ -255,6 +289,7 @@ function hostStartGame() {
   const setup = buildSetup(S.players, S.settings);
   const terrain = generateTerrain(setup.seed);
   S.game = new Game(setup, terrain);
+  S.bots = new BotManager(S.game);
   S.netEvents = [];
   S.hostFx = [];
   S.stepCount = 0;
@@ -279,6 +314,7 @@ function hostTick() {
   while (S.simAcc >= SIM_STEP) {
     S.simAcc -= SIM_STEP;
     g.step(SIM_STEP);
+    if (S.bots) S.bots.update(SIM_STEP);
     S.stepCount++;
     for (const ev of g.drainEvents()) {
       if (ev.k === 'crater') renderer.handleEvent(ev); // keep the host's terrain picture in sync immediately
@@ -404,6 +440,7 @@ function enterGame(setup, terrain) {
 function exitGameView() {
   S.inGame = false;
   S.game = null;
+  S.bots = null;
   S.sync = null;
   S.view = null;
   ui.setInGame(false);
